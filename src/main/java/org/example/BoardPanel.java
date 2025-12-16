@@ -8,7 +8,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class BoardPanel extends JPanel {
-    private static final int S = 72;
+    private static final int S = 72; // Размер клетки
     private final CheckersGame game;
     private final JFrame frame;
     private final GameMode mode;
@@ -24,7 +24,8 @@ public class BoardPanel extends JPanel {
         addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (isHumanTurn()) {
+                // Ход человека возможен только если сейчас его очередь и игра не закончилась
+                if (isHumanTurn() && game.getWinner() == null) {
                     int x = e.getX() - 20;
                     int y = e.getY() - 20;
                     if (x >= 0 && y >= 0) {
@@ -34,6 +35,9 @@ public class BoardPanel extends JPanel {
                             game.click(r, c);
                             updateTitle();
                             repaint();
+
+                            // Проверяем победу и ход ИИ
+                            checkGameOver();
                             checkAIMove();
                         }
                     }
@@ -42,6 +46,7 @@ public class BoardPanel extends JPanel {
         });
 
         updateTitle();
+        // Если игра начинается с хода ИИ
         if (!isHumanTurn()) {
             SwingUtilities.invokeLater(this::makeAIMoveDelayed);
         }
@@ -63,14 +68,52 @@ public class BoardPanel extends JPanel {
         executor.submit(() -> {
             try { Thread.sleep(800); } catch (Exception ignored) {}
             SwingUtilities.invokeLater(() -> {
+                // Ещё раз проверяем победителя перед ходом, чтобы не ходить по пустой доске
+                if (game.getWinner() != null) return;
+
                 game.makeAIMove();
                 updateTitle();
                 repaint();
+
+                checkGameOver();
+
+                // Если режим ИИ против ИИ — продолжаем цикл
                 if (mode == GameMode.AI_VS_AI && game.getWinner() == null) {
                     makeAIMoveDelayed();
+                } else {
+                    // Если сейчас снова очередь ИИ (например, серия взятий или баг), проверяем ещё раз
+                    checkAIMove();
                 }
             });
         });
+    }
+
+    /**
+     * Основная логика окончания игры.
+     * Показывает диалог и обрабатывает выбор пользователя.
+     */
+    private void checkGameOver() {
+        String winner = game.getWinner();
+        if (winner != null) {
+            int option = JOptionPane.showConfirmDialog(frame,
+                    winner + " победили!\nХотите начать заново?",
+                    "Игра окончена",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.INFORMATION_MESSAGE);
+
+            if (option == JOptionPane.YES_OPTION) {
+                game.resetGame();
+                updateTitle();
+                repaint();
+
+                // Если при рестарте первым должен ходить ИИ — запускаем его
+                if (!isHumanTurn()) {
+                    makeAIMoveDelayed();
+                }
+            } else {
+                System.exit(0);
+            }
+        }
     }
 
     private void updateTitle() {
@@ -89,46 +132,46 @@ public class BoardPanel extends JPanel {
 
         int offsetX = 20, offsetY = 20;
 
+        // Доска
         for (int r = 0; r < 8; r++) for (int c = 0; c < 8; c++) {
             g2.setColor((r + c) % 2 == 0 ? new Color(240, 217, 181) : new Color(181, 136, 99));
             g2.fillRect(offsetX + c * S, offsetY + r * S, S, S);
         }
 
-        // выбранная шашка — зелёная обводка
+        // Координаты
+        g2.setColor(new Color(50, 50, 50));
+        g2.setFont(new Font("Arial", Font.BOLD, 18));
+        for (int i = 0; i < 8; i++) {
+            g2.drawString(String.valueOf((char) ('a' + i)), offsetX + i * S + S/2 - 5, offsetY + 8 * S + 18);
+            g2.drawString(String.valueOf(8 - i), offsetX - 15, offsetY + i * S + S / 2 + 5);
+        }
+
+        // Выделенная шашка
         Move sel = game.getSelected();
         if (sel != null && sel.fromRow >= 0) {
-            int x = offsetX + sel.fromCol * S + 8;
-            int y = offsetY + sel.fromRow * S + 8;
-            int size = S - 16;
+            int x = offsetX + sel.fromCol * S + 2;
+            int y = offsetY + sel.fromRow * S + 2;
             g2.setColor(Color.GREEN);
-            g2.setStroke(new BasicStroke(4));
-            g2.drawOval(x - 4, y - 4, size + 8, size + 8);
+            g2.setStroke(new BasicStroke(3));
+            g2.drawRect(x, y, S - 4, S - 4);
             g2.setStroke(new BasicStroke(1));
         }
 
-        // возможные ходы
+        // Возможные ходы
         for (Move m : game.getPossibleMoves()) {
-            int tx = offsetX + m.toCol * S + 12;
-            int ty = offsetY + m.toRow * S + 12;
-            g2.setColor(new Color(255, 255, 0, 220));
-            g2.fillOval(tx, ty, S - 24, S - 24);
+            int tx = offsetX + m.toCol * S + S/2;
+            int ty = offsetY + m.toRow * S + S/2;
+            g2.setColor(new Color(0, 255, 0, 150));
+            g2.fillOval(tx - 8, ty - 8, 16, 16);
 
-            if (Math.abs(m.toRow - m.fromRow) > 1) {
-                int dr = Integer.signum(m.toRow - m.fromRow);
-                int dc = Integer.signum(m.toCol - m.fromCol);
-                int steps = Math.max(Math.abs(m.toRow - m.fromRow), Math.abs(m.toCol - m.fromCol));
-                for (int i = 1; i < steps; i++) {
-                    int pr = m.fromRow + dr * i;
-                    int pc = m.fromCol + dc * i;
-                    int px = offsetX + pc * S + 20;
-                    int py = offsetY + pr * S + 20;
-                    g2.setColor(new Color(100, 255, 100, 80));
-                    g2.fillRect(px, py, S - 40, S - 40);
-                }
+            // Если это взятие — подсвечиваем путь
+            if (m.isCapture) {
+                g2.setColor(new Color(255, 0, 0, 100));
+                g2.fillRect(offsetX + m.toCol * S, offsetY + m.toRow * S, S, S);
             }
         }
 
-        // шашки
+        // Шашки
         for (int r = 0; r < 8; r++) for (int c = 0; c < 8; c++) {
             Piece p = game.get(r, c);
             if (p == Piece.EMPTY) continue;
@@ -137,27 +180,25 @@ public class BoardPanel extends JPanel {
             int y = offsetY + r * S + 8;
             int size = S - 16;
 
-            g2.setColor(new Color(0, 0, 0, 60));
-            g2.fillOval(x + 4, y + 4, size, size);
+            // Тень
+            g2.setColor(new Color(0, 0, 0, 50));
+            g2.fillOval(x + 3, y + 3, size, size);
 
             g2.setColor(p.isWhite() ? Color.WHITE : Color.BLACK);
             g2.fillOval(x, y, size, size);
 
-            g2.setColor(p.isWhite() ? new Color(40, 40, 40) : Color.WHITE);
-            for (int i = 0; i < 3; i++) g2.drawOval(x - i, y - i, size + 2 * i, size + 2 * i);
+            g2.setColor(p.isWhite() ? Color.GRAY : Color.DARK_GRAY);
+            g2.drawOval(x, y, size, size);
+            g2.drawOval(x + 5, y + 5, size - 10, size - 10);
 
             if (p.isKing()) {
                 g2.setColor(p.isWhite() ? Color.BLACK : Color.YELLOW);
-                g2.setFont(new Font("Serif", Font.BOLD, 44));
-                g2.drawString("K", x + 16, y + 48);
+                g2.setFont(new Font("Serif", Font.BOLD, 40));
+                FontMetrics fm = g2.getFontMetrics();
+                int kw = fm.stringWidth("K");
+                int kh = fm.getAscent();
+                g2.drawString("K", x + (size - kw)/2, y + (size + kh)/2 - 5);
             }
-        }
-
-        g2.setColor(new Color(50, 50, 50));
-        g2.setFont(new Font("Arial", Font.BOLD, 18));
-        for (int i = 0; i < 8; i++) {
-            g2.drawString(String.valueOf((char) ('a' + i)), offsetX + i * S + 26, offsetY + 8 * S + 18);
-            g2.drawString(String.valueOf(8 - i), offsetX - 18, offsetY + i * S + S / 2 + 8);
         }
     }
 }

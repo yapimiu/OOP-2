@@ -1,28 +1,41 @@
 package org.example;
 
-public class Move {
-    public final int fromRow, fromCol, toRow, toCol;
+import java.util.Objects;
 
-    public Move(int fromRow, int fromCol, int toRow, int toCol) {
+public class Move {
+    public int fromRow, fromCol, toRow, toCol;
+    public boolean isCapture;
+
+    public Move(int fromRow, int fromCol, int toRow, int toCol, boolean isCapture) {
         this.fromRow = fromRow;
         this.fromCol = fromCol;
         this.toRow = toRow;
         this.toCol = toCol;
+        this.isCapture = isCapture;
+    }
+
+    public Move(int fromRow, int fromCol, int toRow, int toCol) {
+        this(fromRow, fromCol, toRow, toCol, false);
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof Move m)) return false;
-        return fromRow == m.fromRow && fromCol == m.fromCol && toRow == m.toRow && toCol == m.toCol;
+    public boolean equals(Object obj) {
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+        Move move = (Move) obj;
+        return fromRow == move.fromRow && fromCol == move.fromCol &&
+                toRow == move.toRow && toCol == move.toCol &&
+                isCapture == move.isCapture;
     }
 
     @Override
     public int hashCode() {
-        int result = fromRow;
-        result = 31 * result + fromCol;
-        result = 31 * result + toRow;
-        result = 31 * result + toCol;
-        return result;
+        return Objects.hash(fromRow, fromCol, toRow, toCol, isCapture);
+    }
+
+    @Override
+    public String toString() {
+        return String.format("(%d,%d)->(%d,%d) %s", fromRow, fromCol, toRow, toCol,
+                isCapture ? "[захват]" : "");
     }
 }
